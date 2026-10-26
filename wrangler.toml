@@ -1,0 +1,9 @@
+﻿name = "wows-pr-lab"
+main = "worker/index.js"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[assets]
+directory = "./app/public"
+binding = "ASSETS"
+not_found_handling = "none"

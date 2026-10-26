@@ -10,3 +10,6 @@ previews/
 # 根目录的历史交付物
 /*.html
 /*.pdf
+
+# wrangler 本地状态
+.wrangler/

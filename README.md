@@ -228,3 +228,40 @@ railway up
 - 区域选 **Singapore**，国内访问相对快
 - 服务端已内置限流：每 IP 每分钟 20 次查询（实测 19 次 200 + 4 次 429）
 - `HOST` 默认 `0.0.0.0`、`PORT` 读取平台注入值，本地与云端通用
+
+---
+
+## 十一、已部署（Cloudflare Workers）
+
+**线上地址：** https://pr.wows-tool.top
+
+| 项 | 说明 |
+|---|---|
+| 运行环境 | Cloudflare Workers（免费计划，无需绑卡） |
+| 入口脚本 | `worker/index.js` |
+| 静态资源 | `app/public`，通过 Workers Assets 提供 |
+| 数据 | `app/data/*.json` 打包进 Worker（约 305 KiB，gzip 80 KiB） |
+| 密钥 | `WG_APP_ID` 存为 Worker Secret，不进仓库 |
+| 自定义域 | `pr.wows-tool.top`（Cloudflare 托管，自动 SSL） |
+
+### 重新部署
+
+```powershell
+# 首次或换机器：登录
+npx wrangler login
+
+# 部署
+npm run deploy
+
+# 设置密钥（只需一次）
+npx wrangler secret put WG_APP_ID
+```
+
+### 本地调试 Worker
+
+```powershell
+npx wrangler dev --var WG_APP_ID:你的key
+# http://127.0.0.1:8787
+```
+
+> 注意：`*.workers.dev` 域名在国内被 DNS 污染，直连超时，所以必须绑自定义域名。
