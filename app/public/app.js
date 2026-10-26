@@ -190,6 +190,7 @@ function render(d) {
       <div class="sec-title" style="margin:0">全部舰船（含低场次，按 n/(n+30) 收缩加权）</div>
       <div class="sorts">
         <select id="tierFilter" class="tiersel" title="按等级筛选"></select>
+        <select id="classFilter" class="tiersel" title="按舰种筛选"></select>
         <button data-sort="battles" class="active">场次</button>
         <button data-sort="tier">等级</button>
         <button data-sort="score">单船评分</button>
@@ -377,23 +378,48 @@ const PAGE_SIZE = 20;
 let SHIP_STATE = { list: [], sort: 'battles', dir: -1, page: 1 };
 
 function bindShips(list) {
-  SHIP_STATE = { list, sort: 'battles', dir: -1, page: 1, tier: 'all' };
+  SHIP_STATE = { list, sort: 'battles', dir: -1, page: 1, tier: 'all', cls: 'all' };
   const card = document.getElementById('shipcard');
   if (!card) return;
 
-  const sel = card.querySelector('#tierFilter');
-  if (sel) {
-    const tiers = [...new Set(list.map((s) => s.tier))].sort((a, b) => a - b);
-    sel.innerHTML = '<option value="all">全部等级</option>' + tiers.map((t) => {
-      const n = list.filter((s) => s.tier === t).length;
-      return '<option value="' + t + '">' + t + ' 级 (' + n + ')</option>';
-    }).join('');
-    sel.addEventListener('change', () => {
-      SHIP_STATE.tier = sel.value;
-      SHIP_STATE.page = 1;
-      drawShips();
-    });
-  }
+  const tierSel = card.querySelector('#tierFilter');
+  const classSel = card.querySelector('#classFilter');
+
+  // 两个下拉的计数互相联动：等级计数受舰种影响，舰种计数受等级影响
+  const renderFilters = () => {
+    const byClass = SHIP_STATE.cls === 'all' ? list : list.filter((s) => s.type === SHIP_STATE.cls);
+    const byTier = SHIP_STATE.tier === 'all' ? list : list.filter((s) => String(s.tier) === SHIP_STATE.tier);
+
+    const tiers = [...new Set(byClass.map((s) => s.tier))].sort((a, b) => a - b);
+    tierSel.innerHTML = '<option value="all">全部等级</option>' + tiers.map((t) =>
+      '<option value="' + t + '">' + t + ' 级 (' + byClass.filter((s) => s.tier === t).length + ')</option>',
+    ).join('');
+    if (!tiers.some((t) => String(t) === SHIP_STATE.tier)) SHIP_STATE.tier = 'all';
+    tierSel.value = SHIP_STATE.tier;
+
+    const classes = [...new Set(byTier.map((s) => s.type))];
+    classSel.innerHTML = '<option value="all">全部舰种</option>' + classes.map((c) =>
+      '<option value="' + c + '">' + (CLASS_NAME[c] || c) + ' (' + byTier.filter((s) => s.type === c).length + ')</option>',
+    ).join('');
+    if (!classes.includes(SHIP_STATE.cls)) SHIP_STATE.cls = 'all';
+    classSel.value = SHIP_STATE.cls;
+  };
+
+  tierSel.addEventListener('change', () => {
+    SHIP_STATE.tier = tierSel.value;
+    SHIP_STATE.page = 1;
+    renderFilters();
+    drawShips();
+  });
+
+  classSel.addEventListener('change', () => {
+    SHIP_STATE.cls = classSel.value;
+    SHIP_STATE.page = 1;
+    renderFilters();
+    drawShips();
+  });
+
+  renderFilters();
 
   card.querySelectorAll('.sorts button').forEach((b) => {
     b.addEventListener('click', () => {
@@ -419,9 +445,9 @@ function bindShips(list) {
 
 function sortShips() {
   const keyOf = (x) => (SHIP_STATE.sort === 'battles' ? x.battles : SHIP_STATE.sort === 'tier' ? x.tier : x.tShip);
-  const pool = SHIP_STATE.tier && SHIP_STATE.tier !== 'all'
-    ? SHIP_STATE.list.filter((s) => String(s.tier) === SHIP_STATE.tier)
-    : SHIP_STATE.list;
+  const pool = SHIP_STATE.list.filter((s) =>
+    (SHIP_STATE.tier === 'all' || String(s.tier) === SHIP_STATE.tier) &&
+    (SHIP_STATE.cls === 'all' || s.type === SHIP_STATE.cls));
   return [...pool].sort((a, b) => {
     let d = (keyOf(a) - keyOf(b)) * SHIP_STATE.dir;
     if (d !== 0) return d;
@@ -429,6 +455,13 @@ function sortShips() {
     if (d !== 0) return d;
     return String(a.name).localeCompare(String(b.name), 'zh');
   });
+}
+
+function filterTag() {
+  const tags = [];
+  if (SHIP_STATE.tier !== 'all') tags.push(SHIP_STATE.tier + ' 级');
+  if (SHIP_STATE.cls !== 'all') tags.push(CLASS_NAME[SHIP_STATE.cls] || SHIP_STATE.cls);
+  return tags.length ? '（' + tags.join(' · ') + '）' : '';
 }
 
 function drawShips() {
@@ -466,6 +499,6 @@ function drawShips() {
 
   document.getElementById('shipPager').innerHTML = `
     <button data-p="prev" ${SHIP_STATE.page <= 1 ? 'disabled' : ''}>上一页</button>
-    <span>第 ${SHIP_STATE.page} / ${pages} 页 · 共 ${fmt(total)} 艘${SHIP_STATE.tier && SHIP_STATE.tier !== 'all' ? '（' + SHIP_STATE.tier + ' 级）' : ''}</span>
+    <span>第 ${SHIP_STATE.page} / ${pages} 页 · 共 ${fmt(total)} 艘${filterTag()}</span>
     <button data-p="next" ${SHIP_STATE.page >= pages ? 'disabled' : ''}>下一页</button>`;
 }
