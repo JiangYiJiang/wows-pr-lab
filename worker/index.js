@@ -63,7 +63,10 @@ async function api(pathName, params, env, retries = 2) {
       if (j.status !== 'ok') throw new Error(`${pathName}: ${j.error && j.error.message}`);
       return j.data;
     } catch (e) {
-      if (i === retries) throw new Error(`${pathName} 超时或失败`);
+      if (i === retries) {
+        if (/INVALID_SEARCH/.test(e.message)) throw new Error('昵称包含不支持的字符（游戏昵称只含英文、数字和符号）');
+        throw e;
+      }
       await new Promise((r) => setTimeout(r, 400));
     }
   }
@@ -105,10 +108,12 @@ async function resolveName(q, env, origin) {
   return found;
 }
 
-/** 纯数字先当 account_id；否则按昵称 */
+/** 昵称优先（WoWS 昵称全局唯一）；昵称查不到且是纯数字时，再当 account_id 兜底 */
 async function resolveAccount(q, env, origin) {
+  const byName = await resolveName(q, env, origin);
+  if (byName) return byName;
   if (/^\d{5,}$/.test(q)) return { id: Number(q), numeric: true };
-  return resolveName(q, env, origin);
+  return null;
 }
 
 /** 拉取原始战绩（与权重无关，可长期缓存） */
@@ -188,25 +193,19 @@ function rateInfo(ip) {
 
 /* ---------- 主逻辑 ---------- */
 async function queryPlayer(q, weights, env, ip, origin) {
+  if (!/^[\x21-\x7E]+$/.test(q)) {
+    return { ok: false, error: '昵称只包含英文、数字和符号，不支持中文或空格' };
+  }
   const pKey = `pl:${q.toLowerCase()}|${weights ? JSON.stringify(weights) : 'default'}`;
   const hitPayload = await cacheGet(origin, pKey);
   if (hitPayload) return hitPayload;
 
   rateInfo(ip);
 
-  let found = await resolveAccount(q, env, origin);
-  let raw = found ? await fetchRaw(found.id, env, origin) : null;
+  const found = await resolveAccount(q, env, origin);
+  if (!found) return { ok: false, error: `找不到昵称「${q}」的玩家，请检查拼写（需与游戏内完全一致）` };
 
-  // 纯数字但 ID 查不到时，回退成昵称搜索（有些玩家的昵称就是纯数字）
-  if (!raw && /^\d+$/.test(q)) {
-    const byName = await resolveName(q, env, origin);
-    if (byName) {
-      found = byName;
-      raw = await fetchRaw(byName.id, env, origin);
-    }
-  }
-
-  if (!found) return { ok: false, error: '找不到这个玩家（昵称需与游戏内完全一致）' };
+  const raw = await fetchRaw(found.id, env, origin);
   if (!raw) return { ok: false, error: '账号不存在或不可见' };
 
   await ensureMeta(raw.rows.map((s) => s.sid), env);

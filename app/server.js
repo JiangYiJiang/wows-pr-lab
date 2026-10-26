@@ -81,7 +81,7 @@ async function ensureMeta(ids) {
 }
 
 async function lookup(q) {
-  if (/^\d{5,}$/.test(q)) return { id: Number(q), name: null };
+  // 昵称优先：WoWS 昵称全局唯一，玩家通常也只知道昵称
   for (const type of ['exact', 'startswith']) {
     const list = await api('account/list', { search: q, type, limit: 20 });
     if (list && list.length) {
@@ -89,6 +89,8 @@ async function lookup(q) {
       return { id: (exact || list[0]).account_id, name: (exact || list[0]).nickname, candidates: list.length > 1 ? list.map((x) => x.nickname) : undefined };
     }
   }
+  // 昵称查不到时，纯数字再当 account_id 兜底
+  if (/^\d{5,}$/.test(q)) return { id: Number(q), name: null };
   return null;
 }
 
@@ -127,24 +129,10 @@ async function queryPlayer(q, weights, ip) {
     throw err;
   }
 
-  let found = await lookup(q);
-  if (!found) return { ok: false, error: '找不到这个玩家（昵称需与游戏内完全一致）' };
+  const found = await lookup(q);
+  if (!found) return { ok: false, error: `找不到昵称「${q}」的玩家，请检查拼写（需与游戏内完全一致）` };
 
-  let info = (await api('account/info', { account_id: found.id }))[found.id];
-
-  // 纯数字但按 ID 查不到时，回退成昵称搜索
-  if (!info && /^\d+$/.test(q)) {
-    for (const type of ['exact', 'startswith']) {
-      const list = await api('account/list', { search: q, type, limit: 20 });
-      const pick = list && list.find((x) => x.nickname.toLowerCase() === q.toLowerCase());
-      if (pick) {
-        found = { id: pick.account_id };
-        info = (await api('account/info', { account_id: pick.account_id }))[pick.account_id];
-        break;
-      }
-    }
-  }
-
+  const info = (await api('account/info', { account_id: found.id }))[found.id];
   if (!info) return { ok: false, error: '账号不存在或不可见' };
 
   const st = await api('ships/stats', { account_id: found.id });
