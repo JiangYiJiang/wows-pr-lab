@@ -161,3 +161,10 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
   .chip{font-size:11.5px}
   .who h2{font-size:21px}
 }
+
+/* 等级筛选下拉 */
+.tiersel{padding:5px 10px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.04);
+  color:var(--dim);font-size:12px;cursor:pointer;outline:none;transition:.15s}
+.tiersel:hover{color:#fff;border-color:rgba(76,201,240,.35)}
+.tiersel:focus{border-color:rgba(76,201,240,.5)}
+.tiersel option{background:#0b111c;color:#e9eef8}
