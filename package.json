@@ -1,0 +1,12 @@
+﻿{
+  "name": "wows-pr-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WoWS PR calculator",
+  "main": "app/server.js",
+  "scripts": {
+    "start": "node app/server.js",
+    "dev": "node app/server.js"
+  },
+  "engines": { "node": ">=18" }
+}

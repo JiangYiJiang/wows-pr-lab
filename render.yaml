@@ -1,0 +1,14 @@
+﻿services:
+  - type: web
+    name: wows-pr-lab
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/meta
+    envVars:
+      - key: WG_APP_ID
+        sync: false
+      - key: NODE_VERSION
+        value: 20

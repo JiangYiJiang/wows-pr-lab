@@ -1,0 +1,12 @@
+﻿node_modules/
+*.log
+.env
+
+# 本地数据/记录，不进仓库
+pipeline/
+session/
+previews/
+
+# 根目录的历史交付物
+/*.html
+/*.pdf
