@@ -1,8 +1,8 @@
-/**
+﻿/**
  * Cloudflare Worker 版本
  * - 静态资源由 Workers Assets 提供（app/public）
  * - /api/player、/api/meta 由本脚本处理
- * - 评分逻辑复用 app/scorer.js
+ * - 三层缓存：账号解析 1h / 原始战绩 10min / 最终结果 5min
  */
 import baselines from '../app/data/baselines.json';
 import calibration from '../app/data/calibration.json';
@@ -14,27 +14,58 @@ const { scoreAccount, DIMS, WEIGHTS } = scorer;
 const BASE = 'https://api.worldofwarships.asia/wows';
 
 const shipMeta = { ...bundledShipMeta };
-const cache = new Map();
-const hits = new Map();
+const mem = new Map();
+
 const RATE_LIMIT = 60;
-const CACHE_TTL = 5 * 60 * 1000;
+const TTL_ACCOUNT = 3600;
+const TTL_RAW = 600;
+const TTL_PAYLOAD = 300;
 
 const DIA = { 'ü': 'u', 'ä': 'a', 'ö': 'o', 'é': 'e', 'è': 'e', 'ê': 'e', 'á': 'a', 'à': 'a', 'í': 'i', 'ó': 'o', 'ú': 'u', 'ñ': 'n', 'ç': 'c', 'å': 'a', 'ø': 'o', 'æ': 'ae', 'ß': 'ss', 'ō': 'o', 'ū': 'u' };
 const slugify = (s) => String(s || '').toLowerCase()
   .replace(/[üäöéèêáàíóúñçåøæßōū]/g, (c) => DIA[c] || c)
   .replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+/* ---------- 缓存 ---------- */
+async function cacheGet(origin, key) {
+  if (mem.has(key)) return mem.get(key);
+  try {
+    const res = await caches.default.match(new Request(`${origin}/__cache/${encodeURIComponent(key)}`));
+    if (res) {
+      const data = await res.json();
+      mem.set(key, data);
+      if (mem.size > 300) mem.clear();
+      return data;
+    }
+  } catch (e) { /* ignore */ }
+  return null;
+}
+
+async function cachePut(origin, key, data, ttl) {
+  mem.set(key, data);
+  if (mem.size > 300) mem.clear();
+  try {
+    await caches.default.put(
+      new Request(`${origin}/__cache/${encodeURIComponent(key)}`),
+      new Response(JSON.stringify(data), { headers: { 'Cache-Control': `max-age=${ttl}`, 'Content-Type': 'application/json' } }),
+    );
+  } catch (e) { /* ignore */ }
+}
+
+/* ---------- WG API ---------- */
 async function api(pathName, params, env, retries = 2) {
   const qs = new URLSearchParams({ application_id: env.WG_APP_ID, ...params });
   for (let i = 0; i <= retries; i++) {
-    const res = await fetch(`${BASE}/${pathName}/?${qs}`);
-    if (res.status === 429) {
-      await new Promise((r) => setTimeout(r, 1000));
-      continue;
+    try {
+      const res = await fetch(`${BASE}/${pathName}/?${qs}`, { signal: AbortSignal.timeout(9000) });
+      if (res.status === 429) { await new Promise((r) => setTimeout(r, 800)); continue; }
+      const j = await res.json();
+      if (j.status !== 'ok') throw new Error(`${pathName}: ${j.error && j.error.message}`);
+      return j.data;
+    } catch (e) {
+      if (i === retries) throw new Error(`${pathName} 超时或失败`);
+      await new Promise((r) => setTimeout(r, 400));
     }
-    const j = await res.json();
-    if (j.status !== 'ok') throw new Error(`${pathName}: ${j.error && j.error.message}`);
-    return j.data;
   }
   throw new Error('rate limited by WG API');
 }
@@ -54,17 +85,65 @@ async function ensureMeta(ids, env) {
   }
 }
 
-async function lookup(q, env) {
-  if (/^\d{5,}$/.test(q)) return { id: Number(q) };
+/** 按昵称解析（exact 优先，其次 startswith） */
+async function resolveName(q, env, origin) {
+  const key = `name:${q.toLowerCase()}`;
+  const cached = await cacheGet(origin, key);
+  if (cached !== null) return cached === false ? null : cached;
+
+  let found = null;
   for (const type of ['exact', 'startswith']) {
     const list = await api('account/list', { search: q, type, limit: 20 }, env);
     if (list && list.length) {
       const exact = list.find((x) => x.nickname.toLowerCase() === q.toLowerCase());
       const pick = exact || list[0];
-      return { id: pick.account_id, candidates: list.length > 1 ? list.map((x) => x.nickname) : undefined };
+      found = { id: pick.account_id, candidates: list.length > 1 ? list.map((x) => x.nickname) : undefined };
+      break;
     }
   }
-  return null;
+  await cachePut(origin, key, found || false, TTL_ACCOUNT);
+  return found;
+}
+
+/** 纯数字先当 account_id；否则按昵称 */
+async function resolveAccount(q, env, origin) {
+  if (/^\d{5,}$/.test(q)) return { id: Number(q), numeric: true };
+  return resolveName(q, env, origin);
+}
+
+/** 拉取原始战绩（与权重无关，可长期缓存） */
+async function fetchRaw(id, env, origin) {
+  const key = `raw:${id}`;
+  const cached = await cacheGet(origin, key);
+  if (cached) return cached;
+
+  const [info, st] = await Promise.all([
+    api('account/info', { account_id: id }, env),
+    api('ships/stats', { account_id: id }, env),
+  ]);
+
+  const account = info[id];
+  if (!account) return null;
+
+  const rows = (st[id] || []).map((s) => {
+    const p = s.pvp || {};
+    return {
+      sid: s.ship_id, b: p.battles || 0, dmg: p.damage_dealt || 0, frags: p.frags || 0,
+      scout: p.damage_scouting || 0, pot: (p.art_agro || 0) + (p.torpedo_agro || 0),
+      cap: p.capture_points || 0, surv: p.survived_battles || 0, wins: p.wins || 0,
+    };
+  }).filter((s) => s.b > 0);
+
+  const raw = { info: account, rows };
+  await cachePut(origin, key, raw, TTL_RAW);
+  return raw;
+}
+
+/* ---------- 参数校验 ---------- */
+function badRequest(message) {
+  const e = new Error(message);
+  e.status = 400;
+  return e;
 }
 
 function parseWeights(raw) {
@@ -90,12 +169,8 @@ function parseWeights(raw) {
   return out;
 }
 
-function badRequest(message) {
-  const e = new Error(message);
-  e.status = 400;
-  return e;
-}
-
+/* ---------- 限流（每 isolate 近似） ---------- */
+const hits = new Map();
 function rateInfo(ip) {
   const now = Date.now();
   const arr = (hits.get(ip) || []).filter((t) => now - t < 60000);
@@ -111,34 +186,38 @@ function rateInfo(ip) {
   if (hits.size > 3000) hits.clear();
 }
 
-async function queryPlayer(q, weights, env, ip) {
-  const cacheKey = q.toLowerCase() + '|' + (weights ? JSON.stringify(weights) : 'default');
-  const hit = cache.get(cacheKey);
-  if (hit && Date.now() - hit.t < CACHE_TTL) return hit.payload;
+/* ---------- 主逻辑 ---------- */
+async function queryPlayer(q, weights, env, ip, origin) {
+  const pKey = `pl:${q.toLowerCase()}|${weights ? JSON.stringify(weights) : 'default'}`;
+  const hitPayload = await cacheGet(origin, pKey);
+  if (hitPayload) return hitPayload;
 
   rateInfo(ip);
 
-  const found = await lookup(q, env);
+  let found = await resolveAccount(q, env, origin);
+  let raw = found ? await fetchRaw(found.id, env, origin) : null;
+
+  // 纯数字但 ID 查不到时，回退成昵称搜索（有些玩家的昵称就是纯数字）
+  if (!raw && /^\d+$/.test(q)) {
+    const byName = await resolveName(q, env, origin);
+    if (byName) {
+      found = byName;
+      raw = await fetchRaw(byName.id, env, origin);
+    }
+  }
+
   if (!found) return { ok: false, error: '找不到这个玩家（昵称需与游戏内完全一致）' };
+  if (!raw) return { ok: false, error: '账号不存在或不可见' };
 
-  const info = (await api('account/info', { account_id: found.id }, env))[found.id];
-  if (!info) return { ok: false, error: '账号不存在或不可见' };
+  await ensureMeta(raw.rows.map((s) => s.sid), env);
 
-  const st = await api('ships/stats', { account_id: found.id }, env);
-  const rows = (st[found.id] || []).map((s) => {
-    const p = s.pvp || {};
-    return {
-      sid: s.ship_id, b: p.battles || 0, dmg: p.damage_dealt || 0, frags: p.frags || 0,
-      scout: p.damage_scouting || 0, pot: (p.art_agro || 0) + (p.torpedo_agro || 0),
-      cap: p.capture_points || 0, surv: p.survived_battles || 0, wins: p.wins || 0,
-    };
-  }).filter((s) => s.b > 0);
+  const score = scoreAccount(
+    { ships: raw.rows, meta: shipMeta },
+    { baseline: baselines, sigma: calibration.sigma, calibration, weights: weights || undefined },
+  );
 
-  await ensureMeta(rows.map((s) => s.sid), env);
-
-  const score = scoreAccount({ ships: rows, meta: shipMeta }, { baseline: baselines, sigma: calibration.sigma, calibration, weights: weights || undefined });
+  const info = raw.info;
   const pvp = info.statistics.pvp || {};
-
   const payload = {
     ok: true,
     player: {
@@ -162,8 +241,8 @@ async function queryPlayer(q, weights, env, ip) {
     },
     candidates: found.candidates,
   };
-  cache.set(cacheKey, { t: Date.now(), payload });
-  if (cache.size > 500) cache.clear();
+
+  await cachePut(origin, pKey, payload, TTL_PAYLOAD);
   return payload;
 }
 
@@ -177,6 +256,7 @@ function json(data, status = 200) {
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    const origin = url.origin;
 
     if (url.pathname === '/api/meta') {
       return json({
@@ -196,14 +276,13 @@ export default {
       const ip = request.headers.get('cf-connecting-ip') || 'unknown';
       try {
         const weights = parseWeights(url.searchParams.get('w'));
-        const payload = await queryPlayer(q, weights, env, ip);
+        const payload = await queryPlayer(q, weights, env, ip, origin);
         return json(payload);
       } catch (e) {
         return json({ ok: false, error: e.message }, e.status || 500);
       }
     }
 
-    // 其余交给静态资源
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return new Response('Not found', { status: 404 });
   },

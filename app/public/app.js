@@ -235,7 +235,7 @@ function weightTableHtml(W) {
       </td>`).join('');
     return `<tr data-c="${c}"><td class="wname">${label}</td>${cells}<td class="wremain">0</td></tr>`;
   }).join('');
-  return `<table class="wtable"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+  return `<div class="wscroll"><table class="wtable"><thead>${head}</thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function bindWeightEditor(W) {

@@ -127,10 +127,24 @@ async function queryPlayer(q, weights, ip) {
     throw err;
   }
 
-  const found = await lookup(q);
+  let found = await lookup(q);
   if (!found) return { ok: false, error: '找不到这个玩家（昵称需与游戏内完全一致）' };
 
-  const info = (await api('account/info', { account_id: found.id }))[found.id];
+  let info = (await api('account/info', { account_id: found.id }))[found.id];
+
+  // 纯数字但按 ID 查不到时，回退成昵称搜索
+  if (!info && /^\d+$/.test(q)) {
+    for (const type of ['exact', 'startswith']) {
+      const list = await api('account/list', { search: q, type, limit: 20 });
+      const pick = list && list.find((x) => x.nickname.toLowerCase() === q.toLowerCase());
+      if (pick) {
+        found = { id: pick.account_id };
+        info = (await api('account/info', { account_id: pick.account_id }))[pick.account_id];
+        break;
+      }
+    }
+  }
+
   if (!info) return { ok: false, error: '账号不存在或不可见' };
 
   const st = await api('ships/stats', { account_id: found.id });
