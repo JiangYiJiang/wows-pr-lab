@@ -289,7 +289,8 @@ const server = http.createServer(async (req, res) => {
         dims: DIMS,
         weights: require('./scorer').WEIGHTS,
         sigma,
-        calibration: { n: calibration.sampleSize, mode: calibration.mode || 'empirical', scaleZ: calibration.scaleZ || null, generatedAt: calibration.generatedAt, stats: calibration.stats, version: calibration.version },
+        calibration: { n: calibration.sampleSize, mode: calibration.mode || 'empirical', scaleZ: calibration.scaleZ || null, generatedAt: calibration.generatedAt, stats: calibration.stats, version: calibration.version, anchors: calibration.anchors || null },
+        dist: calibration.dist || null,
       }));
       return;
     }

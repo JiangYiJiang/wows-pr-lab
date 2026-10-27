@@ -29,12 +29,14 @@ const fmt = (n, d = 0) => Number(n).toLocaleString('en-US', { minimumFractionDig
 let DEFAULT_WEIGHTS = null;
 let CURRENT_Q = '';
 let APPLIED_WEIGHTS = null;
+let DIST = null;
 
 /* ---------- 启动 ---------- */
 (async function init() {
   try {
     const m = await (await fetch('/api/meta')).json();
     DEFAULT_WEIGHTS = m.weights;
+    DIST = m.dist || null;
     $('#m-sample').textContent = `参数化校准 · 基准 wowsdb`;
     $('#m-time').textContent = `v${m.calibration.version} · ${new Date(m.calibration.generatedAt).toLocaleDateString('zh-CN')}`;
   } catch (e) {
@@ -162,7 +164,7 @@ function render(d) {
   </div>
 
   <div class="card">
-    <div class="sec-title">分数分布（1500 = 全服中位，500 = 1 个标准差，截断于 0–3000）</div>
+    <div class="sec-title">分数分布（按 wowsdb 公开档位拟合的实际人群分布；1500 = 中位账号）</div>
     ${distChart(s.T, s.percentile)}
   </div>
 
@@ -330,20 +332,42 @@ function bindWeightEditor(W) {
 /* ---------- 分布曲线 ---------- */
 function distChart(T, percentile) {
   const W = 1000, H = 260, PADL = 46, PADR = 16, PADT = 34, PADB = 34;
-  const mean = 1500, sd = 500, lo = 0, hi = 3000;
+  const lo = 0, hi = 3000;
   const x = (v) => PADL + ((v - lo) / (hi - lo)) * (W - PADL - PADR);
-  const pdf = (v) => Math.exp(-0.5 * Math.pow((v - mean) / sd, 2));
-  const y = (d) => PADT + (1 - d / 1.0) * (H - PADT - PADB);
+  const y = (d) => PADT + (1 - d) * (H - PADT - PADB);
 
-  const pts = [];
-  for (let v = lo; v <= hi; v += 10) pts.push([x(v), y(pdf(v))]);
+  // 实况分布：由 wowsdb 公开档位拟合出的密度曲线（不再是假设正态）
+  let curve;
+  if (DIST && Array.isArray(DIST.t) && DIST.t.length > 10) {
+    curve = DIST.t.map((t, i) => [t, DIST.f[i]]);
+  } else {
+    curve = [];
+    for (let v = lo; v <= hi; v += 10) curve.push([v, Math.exp(-0.5 * Math.pow((v - 1500) / 500, 2))]);
+  }
+  // 曲线两端补到坐标轴边沿，避免悬空
+  if (curve[0][0] > lo) curve.unshift([lo, 0]);
+  if (curve[curve.length - 1][0] < hi) curve.push([hi, 0]);
+
+  const fAt = (t) => {
+    const c = curve;
+    if (t <= c[0][0]) return c[0][1];
+    if (t >= c[c.length - 1][0]) return c[c.length - 1][1];
+    let i = 0;
+    while (i < c.length - 2 && t > c[i + 1][0]) i++;
+    const [t0, f0] = c[i];
+    const [t1, f1] = c[i + 1];
+    return f0 + (f1 - f0) * ((t - t0) / Math.max(1e-9, t1 - t0));
+  };
+
+  const pts = curve.map(([t, f]) => [x(t), y(f)]);
   const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
 
   const clampT = Math.max(lo, Math.min(hi, T));
-  const fillPts = pts.filter((p, i) => i * 10 >= clampT);
+  const fillPts = pts.filter((p, i) => curve[i][0] >= clampT);
   const fill = fillPts.length
-    ? `M${x(clampT).toFixed(1)},${y(0).toFixed(1)} ` + fillPts.map((p) => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ') +
-      ` L${pts[pts.length - 1][0].toFixed(1)},${y(0).toFixed(1)} Z`
+    ? `M${x(clampT).toFixed(1)},${y(0).toFixed(1)} L${x(clampT).toFixed(1)},${y(fAt(clampT)).toFixed(1)} `
+      + fillPts.map((p) => `L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ')
+      + ` L${pts[pts.length - 1][0].toFixed(1)},${y(0).toFixed(1)} Z`
     : '';
 
   const ticks = [0, 500, 1000, 1500, 2000, 2500, 3000].map((v) => {
@@ -353,8 +377,8 @@ function distChart(T, percentile) {
       <text x="${px.toFixed(1)}" y="${H - PADB + 20}" fill="#65748c" font-size="11" text-anchor="middle">${label}</text>`;
   }).join('');
 
-  const guide = Math.abs(T - mean) > 1
-    ? `<line x1="${x(mean)}" y1="${PADT}" x2="${x(mean)}" y2="${H - PADB}" stroke="rgba(255,255,255,.18)" stroke-dasharray="4 4" />`
+  const guide = Math.abs(T - 1500) > 1
+    ? `<line x1="${x(1500)}" y1="${PADT}" x2="${x(1500)}" y2="${H - PADB}" stroke="rgba(255,255,255,.18)" stroke-dasharray="4 4" />`
     : '';
 
   return `<svg viewBox="0 0 ${W} ${H}" class="dist" preserveAspectRatio="none">
@@ -366,9 +390,9 @@ function distChart(T, percentile) {
     <path d="${line}" fill="none" stroke="#4cc9f0" stroke-width="2.4" />
     ${guide}
     <line x1="${x(clampT).toFixed(1)}" y1="${PADT}" x2="${x(clampT).toFixed(1)}" y2="${H - PADB}" stroke="#e8b455" stroke-width="2" />
-    <circle cx="${x(clampT).toFixed(1)}" cy="${y(pdf(clampT)).toFixed(1)}" r="4.5" fill="#e8b455" />
+    <circle cx="${x(clampT).toFixed(1)}" cy="${y(fAt(clampT)).toFixed(1)}" r="4.5" fill="#e8b455" />
     <text x="${x(clampT).toFixed(1)}" y="14" fill="#e8b455" font-size="13" font-weight="700" text-anchor="middle">你 ${Math.round(T)}</text>
-    <text x="8" y="14" fill="#65748c" font-size="11">玩家占比</text>
+    <text x="8" y="14" fill="#65748c" font-size="11">玩家人数</text>
     ${ticks}
   </svg>
   <div class="distnote">所在位置右侧为更强玩家：约 ${percentile}% 的人低于你</div>`;

@@ -315,7 +315,9 @@ export default {
           n: calibration.sampleSize, mode: calibration.mode || 'parametric',
           scaleZ: calibration.scaleZ || null, generatedAt: calibration.generatedAt,
           stats: calibration.stats, version: calibration.version,
+          anchors: calibration.anchors || null,
         },
+        dist: calibration.dist || null,
       });
     }
 

@@ -168,7 +168,8 @@ function scoreAccount(input, refs) {
     if (b) sorted = b.sortedZ;
   }
   const p = cdf(sorted, zAcc);
-  const T = SCORE_MEAN + SCORE_SD * probit(p);
+  // 分数用线性刻度（1 个 C 单位 = SCORE_SD/CAL_SD 分），百分位单独由经验分位表给出
+  const T = Math.max(0, Math.min(3000, scoreOf(zAcc)));
 
   // 置信区间：以「船」为单位估计有效样本量
   let varSum = 0, w2 = 0;
