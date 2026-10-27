@@ -225,3 +225,84 @@ tr[data-href]{cursor:pointer}
 tr[data-href]:hover{background:rgba(76,201,240,.055)}
 tr[data-href]:hover td{color:var(--dim2)}
 tr[data-href]:hover .shiplink{text-decoration:underline;text-underline-offset:3px}
+
+/* ================= 玩家 PK ================= */
+.pkform{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:22px 0 10px}
+.pkform input{
+  flex:1;min-width:190px;background:rgba(255,255,255,.05);border:1px solid var(--line);
+  border-radius:14px;padding:14px 16px;color:var(--txt);font-size:14.5px;outline:none;transition:.2s;
+}
+.pkform input:focus{border-color:rgba(76,201,240,.5);background:rgba(76,201,240,.06)}
+.pkform .vsmini{font-weight:800;color:var(--dim2);letter-spacing:.16em;font-size:11.5px}
+.pkform button{
+  padding:14px 26px;border-radius:14px;border:1px solid rgba(76,201,240,.4);cursor:pointer;
+  background:linear-gradient(135deg,rgba(76,201,240,.22),rgba(232,180,85,.16));
+  color:var(--txt);font-size:14.5px;font-weight:700;letter-spacing:.04em;transition:.2s;
+}
+.pkform button:hover{transform:translateY(-1px);border-color:var(--cyan)}
+.pkform button:disabled{opacity:.5;cursor:default;transform:none}
+.pkform #swap{padding:14px 16px;background:rgba(255,255,255,.05);border-color:var(--line)}
+
+.duel{display:grid;grid-template-columns:1fr 176px 1fr;gap:20px;align-items:center}
+.duelside{display:flex;flex-direction:column;gap:7px;min-width:0}
+.duelside.right{align-items:flex-end;text-align:right}
+.dname{font-size:19px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.dscore{font-size:52px;font-weight:800;letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums}
+.dband{display:inline-block;padding:3px 11px;border-radius:999px;font-size:12px;font-weight:700;width:fit-content}
+.dsub{font-size:12px;color:var(--dim2)}
+.duelmid{text-align:center}
+.vsbadge{font-size:11px;letter-spacing:.34em;color:var(--dim2)}
+.verdict{font-size:18px;font-weight:800;margin-top:10px}
+.vsub{font-size:12px;color:var(--dim2);margin-top:6px}
+.duelfoot{margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.07);
+  font-size:12.5px;color:var(--dim2);text-align:center;line-height:1.7}
+.duelfoot.warnline{color:var(--gold)}
+
+.tug{margin-top:16px}
+.tugbar{position:relative;height:34px;border-radius:11px;background:rgba(255,255,255,.045);overflow:hidden}
+.tugbar .tugmid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.18)}
+.tugbar i{position:absolute;top:6px;bottom:6px;border-radius:7px;transition:left .6s cubic-bezier(.2,.8,.2,1),width .6s}
+.tugscale{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim2);margin-top:8px}
+
+.duelgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+.dg{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);border-radius:13px;padding:12px 14px}
+.dg .k{font-size:11.5px;color:var(--dim2)}
+.dg .v{font-size:21px;font-weight:750;margin-top:5px;font-variant-numeric:tabular-nums}
+.dg .s{font-size:11px;color:var(--dim2);margin-top:3px}
+
+.dimduels{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.dimduel{display:grid;grid-template-columns:54px 1fr 54px;gap:10px;align-items:center;font-size:12.5px}
+.dimduel .dz{font-variant-numeric:tabular-nums;font-weight:600}
+.dimduel .dz.right{text-align:right}
+.dimduel .track{position:relative;height:22px;border-radius:7px;background:rgba(255,255,255,.045);overflow:hidden}
+.dimduel .track .mid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.16)}
+.dimduel .track i{position:absolute;top:5px;bottom:5px;border-radius:5px;transition:left .6s cubic-bezier(.2,.8,.2,1),width .6s}
+.dimduel .dlabel{grid-column:1/-1;text-align:center;font-size:11.5px;color:var(--dim2)}
+.legend{display:flex;justify-content:space-between;font-size:11.5px;color:var(--dim2);margin-top:14px}
+
+.pktable{width:100%;border-collapse:collapse;font-size:12.5px;min-width:660px}
+.pktable th{font-size:10px;letter-spacing:.05em;color:var(--dim2);text-transform:uppercase;
+  text-align:right;padding:0 10px 9px;font-weight:600;white-space:nowrap}
+.pktable th:first-child{text-align:left}
+.pktable td{padding:9px 10px;border-top:1px solid rgba(255,255,255,.05);text-align:right;
+  font-variant-numeric:tabular-nums;color:var(--dim);white-space:nowrap}
+.pktable td:first-child{text-align:left;color:var(--txt)}
+.pktable tbody tr:hover{background:rgba(76,201,240,.055)}
+.pktable tr.weak{opacity:.55}
+.pktable th.sidea,.pktable td.sidea{color:#8fd3ea}
+.pktable th.sideb,.pktable td.sideb{color:#f0b48a}
+
+@media(max-width:720px){
+  .duel{grid-template-columns:1fr;gap:14px;text-align:center}
+  .duelside,.duelside.right{align-items:center;text-align:center}
+  .dscore{font-size:44px}
+  .duelgrid{grid-template-columns:repeat(2,1fr)}
+  .pkform input{min-width:140px}
+}
+
+.dimhead{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:var(--dim2);margin:0 0 12px;padding:0 0 0 0}
+.dimhead span:nth-child(2){opacity:.75}
+
+.toplink{color:var(--dim);text-decoration:none;border:1px solid var(--line);border-radius:999px;
+  padding:3px 11px;font-size:11.5px;transition:.2s;letter-spacing:0}
+.toplink:hover{color:#fff;border-color:rgba(76,201,240,.45)}

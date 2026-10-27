@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { scoreAccount, DIMS } = require('./scorer');
 const { buildShipDetail } = require('./shipdetail');
+const { buildPk } = require('./pkcompare');
 
 const PORT = Number(process.env.PORT || 5173);
 const HOST = '127.0.0.1';
@@ -242,6 +243,30 @@ async function queryShip(q, sid, weights, ip) {
   return payload;
 }
 
+async function queryPk(qa, qb, weights, ip) {
+  const key = 'pk|' + qa.toLowerCase() + '|' + qb.toLowerCase() + '|' + (weights ? JSON.stringify(weights) : 'default');
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit.payload;
+
+  const [pa, pb] = await Promise.all([
+    queryPlayer(qa, weights, ip),
+    queryPlayer(qb, weights, ip),
+  ]);
+  if (!pa.ok) return pa;
+  if (!pb.ok) return pb;
+
+  const payload = buildPk(pa, pb);
+  if (payload.ok) {
+    payload.params = {
+      ...payload.params,
+      sampleSize: calibration.sampleSize,
+      version: calibration.version,
+    };
+    cache.set(key, { t: Date.now(), payload });
+  }
+  return payload;
+}
+
 function serveStatic(req, res) {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/') p = '/index.html';
@@ -280,6 +305,23 @@ const server = http.createServer(async (req, res) => {
       const payload = await queryShip(q, sid, weights, ip);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(payload));
+      return;
+    }
+    if (url.pathname === '/api/pk') {
+      if (!APP_ID) { res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, error: '服务端未配置 WG_APP_ID' })); return; }
+      const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+      const qa = (url.searchParams.get('a') || '').trim();
+      const qb = (url.searchParams.get('b') || '').trim();
+      if (!qa || !qb) { res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, error: '缺少 a / b 参数' })); return; }
+      try {
+        const weights = parseWeights(url.searchParams.get('w'));
+        const payload = await queryPk(qa, qb, weights, ip);
+        res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify(payload));
+      } catch (e) {
+        res.writeHead(e.status || 500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: e.message }));
+      }
       return;
     }
     if (url.pathname === '/api/meta') {

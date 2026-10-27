@@ -10,9 +10,11 @@ import bundledShipMeta from '../app/data/shipmeta.json';
 import namesZh from '../app/data/names_zh_sg.json';
 import scorer from '../app/scorer.js';
 import shipdetail from '../app/shipdetail.js';
+import pkcompare from '../app/pkcompare.js';
 
 const { scoreAccount, DIMS, WEIGHTS } = scorer;
 const { buildShipDetail } = shipdetail;
+const { buildPk } = pkcompare;
 const BASE = 'https://api.worldofwarships.asia/wows';
 
 const shipMeta = { ...bundledShipMeta };
@@ -296,6 +298,27 @@ async function queryShip(q, sid, weights, env, ip, origin) {
   return payload;
 }
 
+/** PK：并行拉两人（复用 player 缓存），再交给 pkcompare 做对比 */
+async function queryPk(qa, qb, weights, env, ip, origin) {
+  const key = `pk:v1:${qa.toLowerCase()}|${qb.toLowerCase()}|${weights ? JSON.stringify(weights) : 'default'}`;
+  const hitPk = await cacheGet(origin, key);
+  if (hitPk) return hitPk;
+
+  const [pa, pb] = await Promise.all([
+    queryPlayer(qa, weights, env, ip, origin),
+    queryPlayer(qb, weights, env, ip, origin),
+  ]);
+  if (!pa.ok) return pa;
+  if (!pb.ok) return pb;
+
+  const payload = buildPk(pa, pb);
+  if (payload.ok) {
+    payload.params = { ...payload.params, sampleSize: calibration.sampleSize, version: calibration.version };
+    await cachePut(origin, key, payload, TTL_PAYLOAD);
+  }
+  return payload;
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -345,6 +368,21 @@ export default {
       try {
         const weights = parseWeights(url.searchParams.get('w'));
         const payload = await queryShip(q, sid, weights, env, ip, origin);
+        return json(payload);
+      } catch (e) {
+        return json({ ok: false, error: e.message }, e.status || 500);
+      }
+    }
+
+    if (url.pathname === '/api/pk') {
+      if (!env.WG_APP_ID) return json({ ok: false, error: '服务端未配置 WG_APP_ID' }, 500);
+      const qa = (url.searchParams.get('a') || '').trim();
+      const qb = (url.searchParams.get('b') || '').trim();
+      if (!qa || !qb) return json({ ok: false, error: '缺少 a / b 参数' }, 400);
+      const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+      try {
+        const weights = parseWeights(url.searchParams.get('w'));
+        const payload = await queryPk(qa, qb, weights, env, ip, origin);
         return json(payload);
       } catch (e) {
         return json({ ok: false, error: e.message }, e.status || 500);
