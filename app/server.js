@@ -9,6 +9,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const { scoreAccount, DIMS } = require('./scorer');
+const { buildShipDetail } = require('./shipdetail');
 
 const PORT = Number(process.env.PORT || 5173);
 const HOST = '127.0.0.1';
@@ -34,6 +35,7 @@ const zhNames = (() => {
 })();
 
 const cache = new Map(); // q -> {t, payload}
+const rawCache = new Map(); // account_id -> {t, info, rows}
 
 /* 轻量限流：只统计真正调用 WG API 的请求（缓存命中不计） */
 const RATE_LIMIT = 60;               // 每 IP 每分钟最多 60 次真实查询
@@ -117,6 +119,32 @@ function parseWeights(raw) {
   return out;
 }
 
+/** 原始战绩（与权重无关，缓存 10 分钟），单船详情页复用 */
+async function fetchRaw(id) {
+  const hit = rawCache.get(id);
+  if (hit && Date.now() - hit.t < 10 * 60 * 1000) return hit;
+
+  const info = (await api('account/info', { account_id: id }))[id];
+  if (!info) return null;
+
+  const st = await api('ships/stats', { account_id: id });
+  const rows = (st[id] || []).map((s) => {
+    const p = s.pvp || {};
+    return {
+      sid: s.ship_id, b: p.battles || 0, dmg: p.damage_dealt || 0, frags: p.frags || 0,
+      scout: p.damage_scouting || 0, pot: (p.art_agro || 0) + (p.torpedo_agro || 0),
+      cap: p.capture_points || 0, surv: p.survived_battles || 0, wins: p.wins || 0,
+      lastBattle: s.last_battle_time || 0,
+      pvp: p,
+    };
+  }).filter((s) => s.b > 0);
+
+  const raw = { t: Date.now(), info, rows };
+  rawCache.set(id, raw);
+  if (rawCache.size > 50) rawCache.clear();
+  return raw;
+}
+
 async function queryPlayer(q, weights, ip) {
   const cacheKey = q.toLowerCase() + '|' + (weights ? JSON.stringify(weights) : 'default');
   const hit = cache.get(cacheKey);
@@ -132,18 +160,10 @@ async function queryPlayer(q, weights, ip) {
   const found = await lookup(q);
   if (!found) return { ok: false, error: `找不到昵称「${q}」的玩家，请检查拼写（需与游戏内完全一致）` };
 
-  const info = (await api('account/info', { account_id: found.id }))[found.id];
-  if (!info) return { ok: false, error: '账号不存在或不可见' };
-
-  const st = await api('ships/stats', { account_id: found.id });
-  const rows = (st[found.id] || []).map((s) => {
-    const p = s.pvp || {};
-    return {
-      sid: s.ship_id, b: p.battles || 0, dmg: p.damage_dealt || 0, frags: p.frags || 0,
-      scout: p.damage_scouting || 0, pot: (p.art_agro || 0) + (p.torpedo_agro || 0),
-      cap: p.capture_points || 0, surv: p.survived_battles || 0, wins: p.wins || 0,
-    };
-  }).filter((s) => s.b > 0);
+  const raw = await fetchRaw(found.id);
+  if (!raw) return { ok: false, error: '账号不存在或不可见' };
+  const info = raw.info;
+  const rows = raw.rows;
 
   await ensureMeta(rows.map((s) => s.sid));
 
@@ -178,6 +198,50 @@ async function queryPlayer(q, weights, ip) {
   return payload;
 }
 
+async function queryShip(q, sid, weights, ip) {
+  const key = 'ship|v2|' + q.toLowerCase() + '|' + sid + '|' + (weights ? JSON.stringify(weights) : 'default');
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit.payload;
+
+  const rl = rateInfo(ip);
+  if (rl.blocked) {
+    const err = new Error('查询太频繁，请 ' + rl.wait + ' 秒后再试');
+    err.status = 429;
+    throw err;
+  }
+
+  const found = await lookup(q);
+  if (!found) return { ok: false, error: `找不到昵称「${q}」的玩家` };
+
+  const raw = await fetchRaw(found.id);
+  if (!raw) return { ok: false, error: '账号不存在或不可见' };
+
+  await ensureMeta([sid]);
+
+  const row = raw.rows.find((r) => r.sid === sid);
+  if (!row) return { ok: false, error: '该玩家没有这艘船的战绩记录' };
+
+  const meta = shipMeta[sid];
+  if (!meta) return { ok: false, error: '未找到该舰船的版本数据' };
+
+  const base = baseline[meta.slug];
+  if (!base) return { ok: false, error: `该舰船暂无全服基准数据（${meta.zh || meta.name}），无法计算评分` };
+
+  const detail = buildShipDetail({
+    row, rows: raw.rows, meta, base,
+    allMeta: shipMeta, baselines: baseline, sigma, weights: weights || undefined,
+  });
+
+  const payload = {
+    ok: true,
+    player: { id: raw.info.account_id, name: raw.info.nickname },
+    ...detail,
+    params: { sigma, version: calibration.version },
+  };
+  cache.set(key, { t: Date.now(), payload });
+  return payload;
+}
+
 function serveStatic(req, res) {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/') p = '/index.html';
@@ -201,6 +265,19 @@ const server = http.createServer(async (req, res) => {
       if (!q) { res.writeHead(400).end(JSON.stringify({ ok: false, error: '缺少 q 参数' })); return; }
       const weights = parseWeights(url.searchParams.get('w'));
       const payload = await queryPlayer(q, weights, ip);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify(payload));
+      return;
+    }
+    if (url.pathname === '/api/ship') {
+      if (!APP_ID) { res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, error: '服务端未配置 WG_APP_ID' })); return; }
+      const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
+      const q = (url.searchParams.get('q') || '').trim();
+      const sid = Number(url.searchParams.get('sid'));
+      if (!q) { res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, error: '缺少 q 参数' })); return; }
+      if (!Number.isFinite(sid) || sid <= 0) { res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, error: '缺少或非法的 sid 参数' })); return; }
+      const weights = parseWeights(url.searchParams.get('w'));
+      const payload = await queryShip(q, sid, weights, ip);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify(payload));
       return;

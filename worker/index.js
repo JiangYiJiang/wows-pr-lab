@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Cloudflare Worker 版本
  * - 静态资源由 Workers Assets 提供（app/public）
  * - /api/player、/api/meta 由本脚本处理
@@ -9,8 +9,10 @@ import calibration from '../app/data/calibration.json';
 import bundledShipMeta from '../app/data/shipmeta.json';
 import namesZh from '../app/data/names_zh_sg.json';
 import scorer from '../app/scorer.js';
+import shipdetail from '../app/shipdetail.js';
 
 const { scoreAccount, DIMS, WEIGHTS } = scorer;
+const { buildShipDetail } = shipdetail;
 const BASE = 'https://api.worldofwarships.asia/wows';
 
 const shipMeta = { ...bundledShipMeta };
@@ -136,6 +138,8 @@ async function fetchRaw(id, env, origin) {
       sid: s.ship_id, b: p.battles || 0, dmg: p.damage_dealt || 0, frags: p.frags || 0,
       scout: p.damage_scouting || 0, pot: (p.art_agro || 0) + (p.torpedo_agro || 0),
       cap: p.capture_points || 0, surv: p.survived_battles || 0, wins: p.wins || 0,
+      lastBattle: s.last_battle_time || 0,
+      pvp: p,   // 单船详情页用（原始字段），只在服务端流转
     };
   }).filter((s) => s.b > 0);
 
@@ -245,6 +249,53 @@ async function queryPlayer(q, weights, env, ip, origin) {
   return payload;
 }
 
+/** 单船详情：不额外调 WG（复用 raw 缓存），只是把这条船的数据摊开 */
+async function queryShip(q, sid, weights, env, ip, origin) {
+  const key = `ship:v2:${q.toLowerCase()}|${sid}|${weights ? JSON.stringify(weights) : 'default'}`;
+  const hitShip = await cacheGet(origin, key);
+  if (hitShip) return hitShip;
+
+  rateInfo(ip);
+
+  const found = await resolveAccount(q, env, origin);
+  if (!found) return { ok: false, error: `找不到昵称「${q}」的玩家` };
+
+  const raw = await fetchRaw(found.id, env, origin);
+  if (!raw) return { ok: false, error: '账号不存在或不可见' };
+
+  await ensureMeta([sid], env);
+
+  const row = raw.rows.find((r) => r.sid === sid);
+  if (!row) return { ok: false, error: '该玩家没有这艘船的战绩记录' };
+
+  const meta = shipMeta[sid];
+  if (!meta) return { ok: false, error: '未找到该舰船的版本数据' };
+
+  const base = baselines[meta.slug];
+  if (!base) {
+    return {
+      ok: false,
+      error: `该舰船暂无全服基准数据（${meta.zh || meta.name}），无法计算评分`,
+      ship: { sid, name: meta.name, zh: meta.zh, tier: meta.tier },
+    };
+  }
+
+  const detail = buildShipDetail({
+    row, rows: raw.rows, meta, base,
+    allMeta: shipMeta, baselines, sigma: calibration.sigma, weights: weights || undefined,
+  });
+
+  const payload = {
+    ok: true,
+    player: { id: raw.info.account_id, name: raw.info.nickname },
+    ...detail,
+    params: { sigma: calibration.sigma, version: calibration.version },
+  };
+
+  await cachePut(origin, key, payload, TTL_PAYLOAD);
+  return payload;
+}
+
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -276,6 +327,22 @@ export default {
       try {
         const weights = parseWeights(url.searchParams.get('w'));
         const payload = await queryPlayer(q, weights, env, ip, origin);
+        return json(payload);
+      } catch (e) {
+        return json({ ok: false, error: e.message }, e.status || 500);
+      }
+    }
+
+    if (url.pathname === '/api/ship') {
+      if (!env.WG_APP_ID) return json({ ok: false, error: '服务端未配置 WG_APP_ID' }, 500);
+      const q = (url.searchParams.get('q') || '').trim();
+      const sid = Number(url.searchParams.get('sid'));
+      if (!q) return json({ ok: false, error: '缺少 q 参数' }, 400);
+      if (!Number.isFinite(sid) || sid <= 0) return json({ ok: false, error: '缺少或非法的 sid 参数' }, 400);
+      const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+      try {
+        const weights = parseWeights(url.searchParams.get('w'));
+        const payload = await queryShip(q, sid, weights, env, ip, origin);
         return json(payload);
       } catch (e) {
         return json({ ok: false, error: e.message }, e.status || 500);

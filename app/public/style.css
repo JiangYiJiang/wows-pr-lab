@@ -168,3 +168,60 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
 .tiersel:hover{color:#fff;border-color:rgba(76,201,240,.35)}
 .tiersel:focus{border-color:rgba(76,201,240,.5)}
 .tiersel option{background:#0b111c;color:#e9eef8}
+
+/* ---------- 单船详情页 ---------- */
+.backlink{color:var(--dim);text-decoration:none;font-size:12.5px;border:1px solid var(--line);padding:5px 12px;border-radius:999px;transition:.2s;display:inline-block}
+.backlink:hover{color:#fff;border-color:rgba(76,201,240,.4)}
+.shiphead{display:flex;align-items:center;gap:18px}
+.tierbig{width:58px;height:58px;flex:none;display:grid;place-items:center;border-radius:15px;font-size:24px;font-weight:800;
+  color:var(--gold);background:linear-gradient(135deg,rgba(232,180,85,.18),rgba(76,201,240,.12));border:1px solid rgba(232,180,85,.3)}
+.shipnames h1{font-size:30px;letter-spacing:-.5px;line-height:1.15}
+.shipen{font-size:13px;color:var(--dim2);margin-top:5px}
+.owner{margin-left:auto;color:var(--cyan);text-decoration:none;font-size:13px;border:1px solid rgba(76,201,240,.3);padding:6px 13px;border-radius:999px;white-space:nowrap}
+.owner:hover{background:rgba(76,201,240,.1)}
+
+.cmphead,.cmprow{display:grid;grid-template-columns:74px 1fr 210px 96px 96px;gap:14px;align-items:center}
+.cmphead{font-size:10.5px;letter-spacing:.1em;color:var(--dim2);text-transform:uppercase;padding:0 2px 8px}
+.cmphead span:nth-child(3),.cmphead span:nth-child(4),.cmphead span:nth-child(5){text-align:right}
+.cmps{display:grid;gap:10px}
+.cmprow{font-size:13px}
+.cmpname{color:var(--dim)}
+.cmptrack{position:relative;height:22px;border-radius:7px;background:rgba(255,255,255,.04);overflow:hidden}
+.cmpmid{position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,.2)}
+.cmptrack i{position:absolute;top:4px;bottom:4px;border-radius:5px;transition:left .5s,width .5s}
+.cmpval{text-align:right;font-variant-numeric:tabular-nums;color:#cfd9e8}
+.cmpval em{color:var(--dim2);font-style:normal}
+.cmpratio{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.cmppct{text-align:right;color:var(--dim2);font-size:12.5px}
+
+.statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media(max-width:900px){.statgrid{grid-template-columns:repeat(2,1fr)}}
+.stat{border:1px solid var(--line);border-radius:12px;padding:11px 13px;background:rgba(255,255,255,.025)}
+.stat .k{font-size:10.5px;letter-spacing:.1em;color:var(--dim2);text-transform:uppercase}
+.stat .v{font-size:18px;font-weight:700;margin-top:5px;font-variant-numeric:tabular-nums}
+.stat .s{font-size:11.5px;color:var(--dim2);margin-top:3px}
+
+/* 列表页：舰船名可点 */
+.shiplink{color:inherit;text-decoration:none;display:inline-flex;align-items:center;gap:2px}
+.shiplink:hover{color:var(--cyan)}
+.shiplink .ext{opacity:0;font-size:11px;margin-left:6px;color:var(--cyan);transition:.15s}
+tr:hover .shiplink .ext{opacity:.85}
+tr[data-href]{cursor:pointer}
+
+@media(max-width:640px){
+  .shiphead{flex-wrap:wrap}
+  .owner{margin-left:0}
+  .shipnames h1{font-size:24px}
+  .cmphead{display:none}
+  .cmprow{grid-template-columns:1fr auto;grid-template-areas:"n p" "t t" "v r";gap:6px 10px;padding:9px 0;border-top:1px solid rgba(255,255,255,.05)}
+  .cmpname{grid-area:n}
+  .cmppct{grid-area:p}
+  .cmptrack{grid-area:t}
+  .cmpval{grid-area:v;text-align:left}
+  .cmpratio{grid-area:r}
+}
+.w0{font-size:10px;border:1px solid var(--line);border-radius:4px;padding:0 4px;margin-left:6px;color:var(--dim2);letter-spacing:0}
+.cmprow.zero .cmpname{color:var(--dim2)}
+tr[data-href]:hover{background:rgba(76,201,240,.055)}
+tr[data-href]:hover td{color:var(--dim2)}
+tr[data-href]:hover .shiplink{text-decoration:underline;text-underline-offset:3px}

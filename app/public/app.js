@@ -440,6 +440,14 @@ function bindShips(list) {
     drawShips();
   });
 
+  // 整行可点：新窗口打开该船详情（点名字走 <a>，这里兜住其余区域）
+  document.getElementById('shipBody').addEventListener('click', (e) => {
+    if (e.target.closest('a')) return;
+    const tr = e.target.closest('tr[data-href]');
+    if (!tr) return;
+    window.open(tr.dataset.href, '_blank', 'noopener');
+  });
+
   drawShips();
 }
 
@@ -474,11 +482,13 @@ function drawShips() {
   const start = (SHIP_STATE.page - 1) * PAGE_SIZE;
   const slice = sorted.slice(start, start + PAGE_SIZE);
 
+  const wsp = APPLIED_WEIGHTS ? '&w=' + encodeURIComponent(JSON.stringify(APPLIED_WEIGHTS)) : '';
   const rows = slice.map((sh) => {
     const b = bandOf(sh.tShip);
     const shrink = (sh.battles / (sh.battles + 30) * 100).toFixed(0);
-    return `<tr>
-      <td><span class="tier">${sh.tier}</span>${escapeHtml(sh.name)}</td>
+    const href = `/ship.html?q=${encodeURIComponent(CURRENT_Q)}&sid=${sh.sid}${wsp}`;
+    return `<tr data-href="${escapeHtml(href)}" title="查看 ${escapeHtml(sh.name)} 的详细数据">
+      <td><a class="shiplink" href="${escapeHtml(href)}" target="_blank" rel="noopener"><span class="tier">${sh.tier}</span>${escapeHtml(sh.name)}<span class="ext">↗</span></a></td>
       <td>${fmt(sh.battles)}</td>
       <td style="color:#65748c">${shrink}%</td>
       <td>${sh.C.toFixed(2)}</td>

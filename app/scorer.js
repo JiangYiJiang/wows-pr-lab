@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /**
  * 评分核心（设计稿实现）
  * z = clip(ln(实际/基准) / σ, -3, 3)  →  舰种加权  →  小样本收缩  →  账号聚合  →  CDF 校准
@@ -73,14 +73,17 @@ function shipComposite(ship, base, type, sigma, weights) {
   let C = 0, wsum = 0;
   for (const k of DIMS) {
     const weight = (w[k] || 0) / 100;
-    if (!weight) { z[k] = 0; continue; }
     const mu = (k === 'surv' || k === 'wr') ? base[k] / 100 : base[k];
-    if (!mu || mu <= 0) { z[k] = 0; wsum += weight; continue; }
-    const val = dims[k];
-    const lr = val > 0 ? Math.log(val / mu) : -4;      // 0 值视为最低
-    const s = sigma[k] || 0.5;
-    z[k] = clamp(lr / s, -Z_CLIP, Z_CLIP);
-    C += z[k] * weight;
+    // z 始终计算（详情页/七维图要展示），权重为 0 只是不参与 C
+    let zz = 0;
+    if (mu > 0) {
+      const val = dims[k];
+      const lr = val > 0 ? Math.log(val / mu) : -4;      // 0 值视为最低
+      const s = sigma[k] || 0.5;
+      zz = clamp(lr / s, -Z_CLIP, Z_CLIP);
+    }
+    z[k] = zz;
+    C += zz * weight;
     wsum += weight;
   }
   if (wsum > 0 && Math.abs(wsum - 1) > 1e-6) C = C / wsum; // 缺失维度时归一

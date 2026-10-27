@@ -1,4 +1,4 @@
-﻿# WoWS PR 研究 · 工作区
+# WoWS PR 研究 · 工作区
 
 《战舰世界》个人评级（PR）的数据抓取、原理拆解与评分体系设计。
 本项目从 2026-10-23 开始，迁移自 `C:\Users\m1381\Documents\deepseek-harness\default-workspace`。
@@ -13,11 +13,12 @@ wows-pr\
 ├── start.ps1                  ← 站点启动脚本
 ├── *.html / *.pdf             ← 交付物（8 个）
 ├── app\                       ← PR 查询站点
-│   ├── server.js              ← HTTP 服务（前端 + /api/player）
+│   ├── server.js              ← HTTP 服务（前端 + /api/player + /api/ship）
 │   ├── scorer.js              ← 评分核心
+│   ├── shipdetail.js          ← 单船详情聚合（Worker 与本地共用）
 │   ├── build_static_calibration.js
 │   ├── data\                  ← baselines / calibration / shipmeta
-│   └── public\                ← index.html / app.js / style.css
+│   └── public\                ← index.html / app.js / style.css / ship.html / ship.js
 ├── previews\                  ← 预览图
 ├── pipeline\                  ← 采集 / 解析 / 生成脚本
 │   └── dumps\                 ← 中间数据与原始响应
@@ -56,6 +57,13 @@ cd C:\Users\m1381\Desktop\wows-pr
 **自定义权重**：结果页内置「100 点制」加点表（5 舰种 × 7 维），支持 +/− 与手动输入，
 超出 100 会自动夹回；每个舰种的「剩余」归零后才可点「按此权重计算」。
 权重通过 `&w=<JSON>` 传给服务端，服务端会校验每组合计为 100。
+
+**单船详情页**：结果页「全部舰船」表格里点船名（或整行）会在新窗口打开
+`/ship.html?q=<昵称>&sid=<shipId>`，数据来自 `GET /api/ship?q=&sid=`。内容包括：
+单船分 + 该玩家队列内排名、七维「本船 / 同船全服基准」对比（含超过全服多少百分比）、
+详细数据（场均与单场最高、胜平负、存活率、主炮/鱼雷命中率、最近战斗）。
+精度：命中率取 `main_battery` / `torpedoes` 的 shots/hits；**航母不显示命中率**（无主炮/鱼雷命中数据）。
+权重为 0 的维度只展示并标注「不计分」。
 
 ---
 ## 二、交付物
