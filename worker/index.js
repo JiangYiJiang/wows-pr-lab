@@ -200,7 +200,7 @@ async function queryPlayer(q, weights, env, ip, origin) {
   if (!/^[\x21-\x7E]+$/.test(q)) {
     return { ok: false, error: '昵称只包含英文、数字和符号，不支持中文或空格' };
   }
-  const pKey = `pl:${q.toLowerCase()}|${weights ? JSON.stringify(weights) : 'default'}`;
+  const pKey = `pl:v2:${q.toLowerCase()}|${weights ? JSON.stringify(weights) : 'default'}`;
   const hitPayload = await cacheGet(origin, pKey);
   if (hitPayload) return hitPayload;
 
@@ -251,7 +251,7 @@ async function queryPlayer(q, weights, env, ip, origin) {
 
 /** 单船详情：不额外调 WG（复用 raw 缓存），只是把这条船的数据摊开 */
 async function queryShip(q, sid, weights, env, ip, origin) {
-  const key = `ship:v2:${q.toLowerCase()}|${sid}|${weights ? JSON.stringify(weights) : 'default'}`;
+  const key = `ship:v3:${q.toLowerCase()}|${sid}|${weights ? JSON.stringify(weights) : 'default'}`;
   const hitShip = await cacheGet(origin, key);
   if (hitShip) return hitShip;
 

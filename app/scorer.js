@@ -20,8 +20,24 @@ const WEIGHTS = {
 };
 
 const SHRINK_K = 30;      // 经验贝叶斯收缩强度
-const SCORE_MEAN = 1500;  // 全服平均
+const SCORE_MEAN = 1500;  // 全服中位（1500 分 = 中位玩家）
 const SCORE_SD = 500;     // 一个标准差（±3σ 正好覆盖 0–3000）
+
+// ── 经验分布校准（Phase 0）────────────────────────────────────────────
+// 综合比值 C 的真实分布不是"中位 1.0、SD 0.35"，而是由 wowsdb 公开的 6 个
+// 百分位档位反推出来的经验曲线：  C(ratio) = 0.9156 + 0.2443·z   (R² = 0.9944)
+// 其中 C(ratio) = 1 + 我们的 C（我们的 C 是"相对基准的偏离"）。
+// 含义：① 中位账号的综合比值低于 1（基准按场次加权，被高活跃玩家抬高）；
+//       ② 真实离散度只有 0.244，旧假设 0.35 过宽，会低估中上水平玩家。
+const CAL_OFFSET = 1 - 0.9156;  // 0.0844：中位玩家低于基准的幅度
+const CAL_SD = 0.2443;          // 综合比值的真实标准差
+
+/** 把"综合比值偏离 C"映射成 0–3000 的账号分（1500 = 中位账号，500 = 1σ）
+ *  注意：单船分不走这里，单船分仍是 1500 + 500·C（1500 = 该船全服基准水平）——
+ *  两个总体的分布宽度不同，账号分的离散度经多船平均后被压缩，不能共用一把尺子。 */
+function scoreOf(C) {
+  return SCORE_MEAN + SCORE_SD * ((C + CAL_OFFSET) / CAL_SD);
+}
 const MIN_SHIP_BATTLES = 1;   // 所有有战绩的船都计入，小样本交给收缩处理
 const Z_CLIP = 3;
 
@@ -163,7 +179,8 @@ function scoreAccount(input, refs) {
   const wsd = den > 0 ? Math.sqrt(varSum / den) : 0.5;
   const nEff = w2 > 0 ? (den * den) / w2 : 1;
   const seZ = wsd / Math.sqrt(Math.max(1, nEff));
-  const ci = 1.96 * SCORE_SD * seZ;
+  // 换算到账号分刻度：1 个 C 单位 = SCORE_SD / CAL_SD 分
+  const ci = 1.96 * SCORE_SD * seZ / CAL_SD;
 
   const dims = {};
   for (const k of DIMS) dims[k] = dimAgg[k].w > 0 ? dimAgg[k].sum / dimAgg[k].w : 0;
@@ -180,4 +197,4 @@ function scoreAccount(input, refs) {
   };
 }
 
-module.exports = { DIMS, DIM_LABEL, WEIGHTS, SHRINK_K, MIN_SHIP_BATTLES, SCORE_MEAN, SCORE_SD, probit, shipComposite, scoreAccount, cdf };
+module.exports = { DIMS, DIM_LABEL, WEIGHTS, SHRINK_K, MIN_SHIP_BATTLES, SCORE_MEAN, SCORE_SD, CAL_OFFSET, CAL_SD, probit, shipComposite, scoreAccount, scoreOf, cdf };

@@ -162,7 +162,7 @@ function render(d) {
   </div>
 
   <div class="card">
-    <div class="sec-title">分数分布（模型：正态 1500 ± 500，截断于 0–3000）</div>
+    <div class="sec-title">分数分布（1500 = 全服中位，500 = 1 个标准差，截断于 0–3000）</div>
     ${distChart(s.T, s.percentile)}
   </div>
 
@@ -187,7 +187,7 @@ function render(d) {
 
   <div class="card" id="shipcard">
     <div class="shipbar">
-      <div class="sec-title" style="margin:0">全部舰船（含低场次，按 n/(n+30) 收缩加权）</div>
+      <div class="sec-title" style="margin:0">全部舰船（含低场次，按 n/(n+30) 收缩加权；单船分 = 1500 + 500·C）</div>
       <div class="sorts">
         <select id="tierFilter" class="tiersel" title="按等级筛选"></select>
         <select id="classFilter" class="tiersel" title="按舰种筛选"></select>
@@ -212,8 +212,8 @@ function render(d) {
         2. 按舰种权重加权成综合比值 <code>C</code>（权重可在上方自定义）；<br>
         3. 小样本收缩 <code>C' = C × n/(n+30)</code>，1 场的新船只按 3.2% 权重计入；<br>
         4. 按场次加权成账号原始分 <code>Z</code>；<br>
-        5. 用参数化正态分布做映射（均值 1500、标准差 500，分位夹紧 0.135%–99.865%）：<code>T = 1500 + 500·(Z / 0.35)</code>，正好覆盖 0–3000。<br>
-        <span style="color:#65748c">基准取自 wowsdb 公开表（三区合并），与亚服单服基准存在 4–9% 差异；分布为参数化设定，非人群实测。置信区间按场次估算。</span>
+        5. 用经验分布做映射（1500 = 全服中位，500 = 1 个标准差，分位夹紧 0.135%–99.865%）：<code>T = 1500 + 500·(C + 0.084) / 0.244</code>，正好覆盖 0–3000。<br>
+        <span style="color:#65748c">基准取自 wowsdb 公开表（三区合并），与亚服单服基准存在 4–9% 差异；分布参数由 wowsdb 公开的百分位档位反推（中位综合比值 0.916、标准差 0.244），非人群实测。置信区间按场次估算。</span>
       </div>
     </details>
   </div>`;
@@ -348,7 +348,7 @@ function distChart(T, percentile) {
 
   const ticks = [0, 500, 1000, 1500, 2000, 2500, 3000].map((v) => {
     const px = x(v);
-    const label = v === 1500 ? '1500 平均' : String(v);
+    const label = v === 1500 ? '1500 中位' : String(v);
     return `<line x1="${px.toFixed(1)}" y1="${H - PADB}" x2="${px.toFixed(1)}" y2="${H - PADB + 5}" stroke="rgba(255,255,255,.25)" />
       <text x="${px.toFixed(1)}" y="${H - PADB + 20}" fill="#65748c" font-size="11" text-anchor="middle">${label}</text>`;
   }).join('');

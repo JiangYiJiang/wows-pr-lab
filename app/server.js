@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 /**
  * PR 查询站点 · 本地服务
  *   GET /                 前端页面
@@ -146,7 +146,7 @@ async function fetchRaw(id) {
 }
 
 async function queryPlayer(q, weights, ip) {
-  const cacheKey = q.toLowerCase() + '|' + (weights ? JSON.stringify(weights) : 'default');
+  const cacheKey = 'v2|' + q.toLowerCase() + '|' + (weights ? JSON.stringify(weights) : 'default');
   const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit.payload;
 
@@ -199,7 +199,7 @@ async function queryPlayer(q, weights, ip) {
 }
 
 async function queryShip(q, sid, weights, ip) {
-  const key = 'ship|v2|' + q.toLowerCase() + '|' + sid + '|' + (weights ? JSON.stringify(weights) : 'default');
+  const key = 'ship|v3|' + q.toLowerCase() + '|' + sid + '|' + (weights ? JSON.stringify(weights) : 'default');
   const hit = cache.get(key);
   if (hit && Date.now() - hit.t < 5 * 60 * 1000) return hit.payload;
 
