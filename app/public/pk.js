@@ -112,7 +112,7 @@ function duelCard(a, b, l1, l2) {
   const vc = v ? VERDICT_COLOR[v.key] : '#93a3ba';
   const edgeTxt = l2.available
     ? `${l2.sdEdge >= 0 ? '+' : ''}${l2.sdEdge.toFixed(2)} 个标准差`
-    : l2.reason || '';
+    : '';
   const winnerName = l2.available ? (l2.winner === 'a' ? a.name : l2.winner === 'b' ? b.name : null) : null;
 
   return `<div class="card">
