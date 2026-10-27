@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const $ = (sel) => document.querySelector(sel);
 const out = $('#out');
