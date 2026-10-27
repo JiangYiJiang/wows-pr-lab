@@ -270,6 +270,8 @@ async function queryPk(qa, qb, weights, ip) {
 function serveStatic(req, res) {
   let p = decodeURIComponent(req.url.split('?')[0]);
   if (p === '/') p = '/index.html';
+  // 与 Cloudflare Assets 的 html_handling 对齐：/pk → /pk.html
+  if (!path.extname(p)) p += '.html';
   const file = path.join(PUBLIC, p);
   if (!file.startsWith(PUBLIC)) { res.writeHead(403).end(); return; }
   fs.readFile(file, (err, buf) => {

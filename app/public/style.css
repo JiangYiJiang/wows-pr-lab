@@ -30,8 +30,13 @@ body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
 
 /* hero */
 .hero{margin-bottom:26px}
-.hero h1{font-size:clamp(28px,4.4vw,46px);line-height:1.12;letter-spacing:-1px;font-weight:750}
-.hero h1 em{font-style:normal;background:linear-gradient(90deg,#4cc9f0,#e8b455);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero h1{font-size:clamp(28px,4.4vw,46px);line-height:1.12;letter-spacing:-1px;font-weight:750;
+  background:linear-gradient(96deg,#4cc9f0 0%,#8b7cf6 34%,#e8b455 68%,#ff7ab8 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 18px rgba(76,201,240,.18))}
+.hero h1 em{font-style:normal;background:linear-gradient(96deg,#4cc9f0 0%,#8b7cf6 40%,#e8b455 78%,#ff7ab8 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent}
+.titlerow{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
 .hero p{color:var(--dim);margin-top:10px;font-size:14.5px;max-width:620px}
 
 /* search */
@@ -175,7 +180,10 @@ footer{margin-top:44px;padding-top:18px;border-top:1px solid var(--line);font-si
 .shiphead{display:flex;align-items:center;gap:18px}
 .tierbig{width:58px;height:58px;flex:none;display:grid;place-items:center;border-radius:15px;font-size:24px;font-weight:800;
   color:var(--gold);background:linear-gradient(135deg,rgba(232,180,85,.18),rgba(76,201,240,.12));border:1px solid rgba(232,180,85,.3)}
-.shipnames h1{font-size:30px;letter-spacing:-.5px;line-height:1.15}
+.shipnames h1{font-size:30px;letter-spacing:-.5px;line-height:1.15;
+  background:linear-gradient(96deg,#4cc9f0 0%,#8b7cf6 34%,#e8b455 68%,#ff7ab8 100%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 2px 14px rgba(76,201,240,.16))}
 .shipen{font-size:13px;color:var(--dim2);margin-top:5px}
 .owner{margin-left:auto;color:var(--cyan);text-decoration:none;font-size:13px;border:1px solid rgba(76,201,240,.3);padding:6px 13px;border-radius:999px;white-space:nowrap}
 .owner:hover{background:rgba(76,201,240,.1)}
@@ -306,3 +314,24 @@ tr[data-href]:hover .shiplink{text-decoration:underline;text-underline-offset:3p
 .toplink{color:var(--dim);text-decoration:none;border:1px solid var(--line);border-radius:999px;
   padding:3px 11px;font-size:11.5px;transition:.2s;letter-spacing:0}
 .toplink:hover{color:#fff;border-color:rgba(76,201,240,.45)}
+
+/* 首页标题旁的 PK 入口 */
+.pkbtn{
+  position:relative;display:inline-flex;align-items:center;gap:8px;
+  padding:9px 18px;border-radius:999px;text-decoration:none;
+  font-size:14px;font-weight:700;letter-spacing:.02em;color:var(--txt);
+  background:linear-gradient(135deg,rgba(76,201,240,.18),rgba(139,124,246,.16) 45%,rgba(232,180,85,.16));
+  border:1px solid rgba(139,124,246,.45);
+  box-shadow:0 0 0 rgba(76,201,240,0),inset 0 1px 0 rgba(255,255,255,.06);
+  transition:transform .18s ease,box-shadow .25s ease,border-color .25s ease;
+  white-space:nowrap;
+}
+.pkbtn .pkdot{width:7px;height:7px;border-radius:50%;background:linear-gradient(135deg,#4cc9f0,#ff7ab8);
+  box-shadow:0 0 10px rgba(139,124,246,.9)}
+.pkbtn:hover{
+  transform:translateY(-1px);border-color:rgba(76,201,240,.75);
+  box-shadow:0 6px 22px rgba(76,201,240,.22),0 0 0 1px rgba(76,201,240,.25) inset;
+}
+@media(max-width:560px){
+  .pkbtn{font-size:13px;padding:7px 14px}
+}
